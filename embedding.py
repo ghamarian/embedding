@@ -355,3 +355,59 @@ k = 5
 distances, indices = index.search(sample_problem_emb, k)
 print("Top-5 nearest kernel indices:", indices)
 print("Corresponding distances:", distances)
+
+
+import numpy as np
+import torch
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+from torch.utils.data import DataLoader
+
+
+def visualize_embeddings(problem_embeddings, kernel_embeddings, sample_size=1000):
+    """
+    Takes problem_embeddings and kernel_embeddings (tensors or numpy arrays),
+    samples them, and plots them in 2D using PCA.
+    """
+    # Convert to numpy if needed
+    if isinstance(problem_embeddings, torch.Tensor):
+        problem_embeddings = problem_embeddings.cpu().numpy()
+    if isinstance(kernel_embeddings, torch.Tensor):
+        kernel_embeddings = kernel_embeddings.cpu().numpy()
+
+    # Determine how many points we actually have
+    num_problem = problem_embeddings.shape[0]
+    num_kernel = kernel_embeddings.shape[0]
+
+    # Sample indices if the embeddings are large
+    sample_problem_idx = np.random.choice(
+        num_problem, size=min(sample_size, num_problem), replace=False
+    )
+    sample_kernel_idx = np.random.choice(
+        num_kernel, size=min(sample_size, num_kernel), replace=False
+    )
+
+    # Extract the sampled embeddings
+    problem_sample = problem_embeddings[sample_problem_idx]
+    kernel_sample = kernel_embeddings[sample_kernel_idx]
+
+    # Combine into one array for PCA
+    combined = np.concatenate([problem_sample, kernel_sample], axis=0)
+
+    # Apply PCA to reduce to 2D
+    pca = PCA(n_components=2)
+    combined_2d = pca.fit_transform(combined)
+
+    # Separate back out the problem/kernel embeddings in 2D
+    prob_2d = combined_2d[: problem_sample.shape[0]]
+    kern_2d = combined_2d[problem_sample.shape[0] :]
+
+    # Plot
+    plt.figure(figsize=(8, 6))
+    plt.scatter(
+        prob_2d[:, 0], prob_2d[:, 1], c="blue", alpha=0.6, label="Problems", s=20
+    )
+    plt.scatter(kern_2d[:, 0], kern_2d[:, 1], c="red", alpha=0.6, label="Kernels", s=20)
+    plt.title("PCA Visualization of Problem & Kernel Embeddings")
+    plt.legend()
+    plt.show()

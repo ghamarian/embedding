@@ -411,3 +411,29 @@ def visualize_embeddings(problem_embeddings, kernel_embeddings, sample_size=1000
     plt.title("PCA Visualization of Problem & Kernel Embeddings")
     plt.legend()
     plt.show()
+
+
+# Replace with your CSV
+csv_file = "nngrid_dataset.csv"
+
+data = pd.read_csv(csv_file)
+
+# Columns describing a problem
+problem_cols = ["M", "N", "K", "log_flops"]
+
+# Group by these columns; each group has 277 rows (for 277 kernels)
+grouped = data.groupby(problem_cols)
+
+# Compute various summaries
+avg_eff = grouped["EFF"].mean().reset_index(name="avg_eff")
+max_eff = grouped["EFF"].max().reset_index(name="max_eff")
+min_eff = grouped["EFF"].min().reset_index(name="min_eff")
+std_eff = grouped["EFF"].std().reset_index(name="std_eff")
+
+# Merge them together for easy inspection
+problem_summary = avg_eff.merge(max_eff, on=problem_cols)
+problem_summary = problem_summary.merge(min_eff, on=problem_cols)
+problem_summary = problem_summary.merge(std_eff, on=problem_cols)
+
+print(problem_summary.head(10))
+print(problem_summary.describe())  # check how avg_eff, max_eff, etc

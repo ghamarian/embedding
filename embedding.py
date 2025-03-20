@@ -456,3 +456,60 @@ mse = mean_squared_error(y_test, y_pred)
 r2 = r2_score(y_test, y_pred)
 
 print(f"MSE: {mse:.4f}, R^2: {r2:.4f}")
+
+
+import torch
+import pandas as pd
+from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
+import numpy as np
+
+class ProblemKernelDataset(Dataset):
+    def __init__(self, csv_file):
+        data = pd.read_csv(csv_file)
+
+        problem_cols = ["M", "N", "K", "log_flops"]
+        label_col = "EFF"
+        kernel_cols = [c for c in data.columns if c not in problem_cols + [label_col]]
+
+        self.problem_features = data[problem_cols].values.astype("float32")
+        self.kernel_features = data[kernel_cols].values.astype("float32")
+        self.labels = data[label_col].values.astype("float32")
+
+    def __len__(self):
+        return len(self.labels)
+
+    def __getitem__(self, idx):
+        return (
+            torch.tensor(self.problem_features[idx], dtype=torch.float32),
+            torch.tensor(self.kernel_features[idx], dtype=torch.float32),
+            torch.tensor(self.labels[idx], dtype=torch.float32),
+        )
+
+def create_weighted_dataloader(csv_file, batch_size=32):
+    dataset = ProblemKernelDataset(csv_file)
+    eff_values = dataset.labels
+    # Example: "inverse frequency" weighting based on EFF bins
+    #  - If EFF is near 1 => "rare" => higher weight
+    #  - If EFF is near 0 => "common" => lower weight
+
+    # Let's define bins or thresholds. For simplicity, just do 2 bins: EFF >= 0.8 is "rare"
+    bin_edges = [0.0, 0.8, 1.01]
+    bin_indices = np.digitize(eff_values, bin_edges) - 1  # 0 if <0.8, 1 if >=0.8
+
+    # Count how many samples in each bin
+    bin_counts = np.bincount(bin_indices)
+    # Avoid division by zero
+    bin_counts = np.maximum(bin_counts, 1)
+
+    # Weight for a sample = 1 / (count of that bin)
+    weights = 1.0 / bin_counts[bin_indices]
+    weights = torch.FloatTensor(weights)
+
+    sampler = WeightedRandomSampler(weights, num_samples=len(weights), replacement=True)
+    dataloader = DataLoader(dataset, batch_size=batch_size, sampler=sampler)
+    return dataloader
+
+# Usage:
+# loader = create_weighted_dataloader("nngrid_dataset.csv", batch_size=64)
+# for problem_x, kernel_x, eff in loader:
+#     # training loop ...
